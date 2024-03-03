@@ -1,0 +1,8 @@
+{"jsonrpc": "2.0", "method": "doit"}
+{"jsonrpc": "2.0", "method": "doit", "id": 55}
+{"jsonrpc": "2.0", "method": "unknown", "id": 55}
+{"jsonrpc": "2.0", "method": "add2", "params": [5, 6], "id": 55}
+{"jsonrpc": "2.0", "method": "print_int", "params": 42}
+{"jsonrpc": "2.0", "method": "add1", "params": [42, 42], "id": 66}
+;ldsajk
+{}
