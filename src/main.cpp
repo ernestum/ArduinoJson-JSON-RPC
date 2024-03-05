@@ -181,7 +181,34 @@ void http_json_rpc_loop() {
   }
 }
 
+void tcp_json_rpc_loop() {
+  EthernetClient client = server.accept();
+  if(client) {
+    if(client.connected()) {
+
+      StaticJsonDocument<3000> json_doc;
+      auto err = deserializeJson(json_doc, client);
+
+      if (err == DeserializationError::Ok) {
+        // Execute the request
+        ArduinoJson::StaticJsonDocument<3000> response;
+        if(registry.execute_request(json_doc, response)) {
+          if(response.overflowed()) {
+            client.writeFully("{\"jsonrpc\": \"2.0\", \"error\": {\"code\": -32000, \"message\": \"Response too large\"}, \"id\": null}");
+          } else {
+            serializeJson(response, client);
+          }              
+        }
+      } else {
+        client.writeFully(get_error_message(err));
+      }
+    }
+    client.stop();
+  }
+}
+
 void loop() {
+  tcp_json_rpc_loop();
   http_json_rpc_loop();
   serial_json_rpc_loop();
 }
