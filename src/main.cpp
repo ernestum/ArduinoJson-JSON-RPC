@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 #include <QNEthernet.h>
+#include <ArduinoHttpServer.h>
+
 #include <arduinojson_rpc.h>
 
 using namespace qindesign::network;
@@ -181,6 +183,61 @@ void http_json_rpc_loop() {
   }
 }
 
+void http_library_json_rpc_loop() {
+  EthernetClient client = server.accept();
+  if(client) {
+    if(client.connected()) {
+      ArduinoHttpServer::StreamHttpRequest<3000> httpRequest(client);
+
+      if (httpRequest.readRequest())
+      {
+        Serial.println(httpRequest.getResource().toString());
+
+        auto is_post = httpRequest.getMethod() == ArduinoHttpServer::Method::Post;
+        auto is_json = httpRequest.getContentType() == "application/json";
+        if(is_post && is_json) {
+          ArduinoJson::StaticJsonDocument<3000> doc;
+          DeserializationError err = deserializeJson(doc, httpRequest.getBody());
+
+          if (err == DeserializationError::Ok)
+          {
+            // Execute the request
+            ArduinoJson::StaticJsonDocument<3000> response;
+            if(registry.execute_request(doc, response)){
+              if(response.overflowed()) {
+                ArduinoHttpServer::StreamHttpReply httpReply(client, httpRequest.getContentType());
+                httpReply.send("{\"jsonrpc\": \"2.0\", \"error\": {\"code\": -32000, \"message\": \"Response too large\"}, \"id\": null}");
+              } else {
+                auto responseString = String();
+                serializeJson(response, responseString);
+                ArduinoHttpServer::StreamHttpReply httpReply(client, httpRequest.getContentType());
+                httpReply.send(responseString);
+              }              
+            }
+          } else {
+            ArduinoHttpServer::StreamHttpReply httpReply(client, httpRequest.getContentType());
+            httpReply.send(get_error_message(err));
+          }
+        } else {
+          ArduinoHttpServer::StreamHttpErrorReply httpReply(client, "application/text");
+          httpReply.send("Invalid request. Must be POST with application/json content type.");
+        }
+      } else {
+         // HTTP parsing failed. Client did not provide correct HTTP data or
+         // client requested an unsupported feature.
+         ArduinoHttpServer::StreamHttpErrorReply httpReply(client, httpRequest.getContentType());
+
+         const char *pErrorStr( httpRequest.getError().cStr() );
+         String errorStr(pErrorStr); //! \todo Make HttpReply FixString compatible.
+
+         httpReply.send( errorStr );
+      }
+
+    }
+    client.stop();
+  }
+}
+
 void tcp_json_rpc_loop() {
   EthernetClient client = server.accept();
   if(client) {
@@ -209,6 +266,7 @@ void tcp_json_rpc_loop() {
 
 void loop() {
   // tcp_json_rpc_loop();
-  http_json_rpc_loop();
+  // http_json_rpc_loop();
+  http_library_json_rpc_loop();
   serial_json_rpc_loop();
 }
