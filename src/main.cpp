@@ -2,8 +2,10 @@
 #include<experimental/optional>
 
 #include <Arduino.h>
-#include <NativeEthernet.h>
+#include <QNEthernet.h>
 #include <arduinojson_rpc.h>
+
+using namespace qindesign::network;
 
 template<class T>
 using optional = std::experimental::optional<T>;
@@ -68,15 +70,14 @@ auto registry = RemoteProcedureRegistry();
 void setup() {
   Serial.begin(9600);
   // while (!Serial) {}
-  
-  // Setup Ethernet
-  uint8_t mac[6];
-  for (uint8_t by = 0; by < 2; by++) mac[by] = (HW_OCOTP_MAC1 >> ((1 - by) * 8)) & 0xFF;
-  for (uint8_t by = 0; by < 4; by++) mac[by + 2] = (HW_OCOTP_MAC0 >> ((3 - by) * 8)) & 0xFF;
 
-  if(!Ethernet.begin(mac)) {
+  if(!Ethernet.begin()) {
     // If DHCP fails, use a static IP
-    Ethernet.begin(mac, IPAddress(192, 168, 1, 177));
+    Serial.println("Failed to start ethernet");
+  }
+  if (!Ethernet.waitForLocalIP(15000)) {
+    printf("Failed to get IP address from DHCP\r\n");
+    Ethernet.begin(192, 168, 1, 177);
   }
 
   // Print the IP address
@@ -85,8 +86,8 @@ void setup() {
   Serial.println(Ethernet.localIP());
 
   // Setup MDNS
-  MDNS.begin("ArduinoJsonRPC", 1);
-  MDNS.addService("_http._tcp", 80);
+  MDNS.begin("ArduinoJsonRPC");
+  MDNS.addService("_http", "_tcp", 80);
 
   server.begin();
 
@@ -128,7 +129,7 @@ void serial_json_rpc_loop() {
 
 void http_json_rpc_loop() {
   // Check if a client has connected
-  EthernetClient client = server.available();
+  EthernetClient client = server.accept();
   if (client) {
     // an http request ends with a blank line
     boolean currentLineIsBlank = true;
@@ -140,10 +141,10 @@ void http_json_rpc_loop() {
         // so you can send a reply
         if (c == '\n' && currentLineIsBlank) {
           // send a standard http response header
-          client.println("HTTP/1.1 200 OK");
-          client.println("Content-Type: application/json");
-          client.println("Connection: close");  // the connection will be closed after completion of the response
-          client.println();
+          client.writeFully("HTTP/1.1 200 OK\n\r");
+          client.writeFully("Content-Type: application/json\n\r");
+          client.writeFully("Connection: close\n\r");  // the connection will be closed after completion of the response
+          client.writeFully("\n\r");
           // Execute the request
           ArduinoJson::StaticJsonDocument<3000> doc;
           DeserializationError err = deserializeJson(doc, client);
@@ -160,7 +161,7 @@ void http_json_rpc_loop() {
               }              
             }
           } else {
-            client.print(get_error_message(err));
+            client.writeFully(get_error_message(err));
           }
           break;
         }
