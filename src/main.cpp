@@ -208,7 +208,7 @@ void tcp_json_rpc_loop() {
 }
 
 void loop() {
-  tcp_json_rpc_loop();
+  // tcp_json_rpc_loop();
   http_json_rpc_loop();
   serial_json_rpc_loop();
 }
