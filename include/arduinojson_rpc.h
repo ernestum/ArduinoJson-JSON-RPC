@@ -7,8 +7,8 @@
 
 struct Request {
     const char* method;
-    ArduinoJson::JsonVariantConst params;
-    ArduinoJson::JsonVariantConst id;
+    JsonVariantConst params;
+    JsonVariantConst id;
 
     bool isNotification() const {
         return id.isNull();
@@ -21,7 +21,7 @@ void convertFromJson(JsonVariantConst src, Request& dst) {
     dst.id = src["id"];
 }
 
-bool canConvertFromJson(ArduinoJson::JsonVariantConst src, const Request&) {
+bool canConvertFromJson(JsonVariantConst src, const Request&) {
     if(not src.is<JsonObjectConst>()) {
         // Serial.println("Not a json object");
         return false;
@@ -58,27 +58,27 @@ bool canConvertFromJson(ArduinoJson::JsonVariantConst src, const Request&) {
  * If the function has a return value, it should be written to the response under the "result" key.
  * 
  */
-using RemoteProcedure = std::function<void(ArduinoJson::JsonVariantConst, ArduinoJson::JsonVariant)>;
+using RemoteProcedure = std::function<void(JsonVariantConst, JsonVariant)>;
 
 template<class T>
 using optional = std::experimental::optional<T>;
 
 
-void make_invalid_params_error(ArduinoJson::JsonObject response) {
-    auto error = response.createNestedObject("error");
+void make_invalid_params_error(JsonObject response) {
+    auto error = response["error"].to<JsonObject>();
     error["code"] = -32602; // Invalid params
     error["message"] = "Invalid params";
 }
 
-void make_invalid_request_error(ArduinoJson::JsonObject response) {
-    auto error = response.createNestedObject("error");
+void make_invalid_request_error(JsonObject response) {
+    auto error = response["error"].to<JsonObject>();
     error["code"] = -32600;
     error["message"] = "Invalid request";
 }
 
 //When there is not return value
-RemoteProcedure makeRemoteProcedure(std::function<bool(ArduinoJson::JsonVariantConst)> call_if_params_match) {
-    return [call_if_params_match](ArduinoJson::JsonVariantConst params, ArduinoJson::JsonVariant response) {
+RemoteProcedure makeRemoteProcedure(std::function<bool(JsonVariantConst)> call_if_params_match) {
+    return [call_if_params_match](JsonVariantConst params, JsonVariant response) {
         auto params_matched = call_if_params_match(params);
         if(params_matched) {
             response["result"].set(nullptr);
@@ -90,8 +90,8 @@ RemoteProcedure makeRemoteProcedure(std::function<bool(ArduinoJson::JsonVariantC
 
 //When there is a return value
 template<class T>
-RemoteProcedure makeRemoteProcedure(std::function<optional<T>(ArduinoJson::JsonVariantConst)> call_if_params_match) {
-    return [call_if_params_match](ArduinoJson::JsonVariantConst params, ArduinoJson::JsonVariant response) {
+RemoteProcedure makeRemoteProcedure(std::function<optional<T>(JsonVariantConst)> call_if_params_match) {
+    return [call_if_params_match](JsonVariantConst params, JsonVariant response) {
         auto result = call_if_params_match(params);
         if(result) {
             response["result"] = *result;
@@ -105,19 +105,19 @@ RemoteProcedure makeRemoteProcedure(std::function<optional<T>(ArduinoJson::JsonV
 struct RemoteProcedureRegistry {
     std::unordered_map<std::string, RemoteProcedure> procedures_by_name;
     
-    bool execute_request(const ArduinoJson::JsonDocument& json_request, const ArduinoJson::JsonDocument& json_response) {
-        if (json_request.is<ArduinoJson::JsonArray>() && json_request.size() > 0) {
-            auto batch_request = json_request.as<ArduinoJson::JsonArrayConst>();
-            execute_batch_request(batch_request, json_response.to<ArduinoJson::JsonArray>());
+    bool execute_request(const JsonDocument& json_request, JsonDocument& json_response) {
+        if (json_request.is<JsonArray>() && json_request.size() > 0) {
+            auto batch_request = json_request.as<JsonArrayConst>();
+            execute_batch_request(batch_request, json_response.to<JsonArray>());
             return json_response.size() > 0;
         } else {
-            auto single_request = json_request.as<ArduinoJson::JsonVariantConst>();
-            return execute_single_request(single_request, json_response.to<ArduinoJson::JsonObject>());
+            auto single_request = json_request.as<JsonVariantConst>();
+            return execute_single_request(single_request, json_response.to<JsonObject>());
         }
     }
 
 private:
-    bool execute_single_request(ArduinoJson::JsonVariantConst json_request, ArduinoJson::JsonObject response) {      
+    bool execute_single_request(JsonVariantConst json_request, JsonObject response) {      
 #ifndef IGNORE_JSONRPC_VERSION
         response["jsonrpc"] = "2.0";
 #endif
@@ -136,11 +136,11 @@ private:
         response["id"] = request.id;
 
         if (procedures_by_name.find(request.method) == procedures_by_name.end()) {
-            auto error = response.createNestedObject("error");
+            auto error = response["error"].to<JsonObject>();
             error["code"] = -32601; // Method not found
             error["message"] = "Method not found";   
             // write all possible names to data field
-            auto data = error.createNestedArray("data");
+            auto data = error["data"].to<JsonArray>();
             for(auto it = procedures_by_name.begin(); it != procedures_by_name.end(); it++) {
                 data.add(it->first);
             }
@@ -151,9 +151,9 @@ private:
         return not request.isNotification();
     }
 
-    void execute_batch_request(ArduinoJson::JsonArrayConst json_request, ArduinoJson::JsonArray response) {
+    void execute_batch_request(JsonArrayConst json_request, JsonArray response) {
         for (auto request : json_request) {
-            auto response_elem = response.createNestedObject();
+            auto response_elem = response.add<JsonObject>();
             auto should_send_response = execute_single_request(request, response_elem);
             if(not should_send_response) {
                 response.remove(response.size() - 1);

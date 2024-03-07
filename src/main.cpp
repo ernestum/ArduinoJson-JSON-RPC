@@ -103,13 +103,13 @@ void setup() {
 void serial_json_rpc_loop() {
 
   if(Serial.available() > 2) {
-    ArduinoJson::StaticJsonDocument<3000> doc;
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, Serial);
 
     if (err == DeserializationError::Ok) 
     {
       // Execute the request
-      ArduinoJson::StaticJsonDocument<3000> response;
+      JsonDocument response;
       if(registry.execute_request(doc, response)) {
         if(response.overflowed()) {
           Serial.println("{\"jsonrpc\": \"2.0\", \"error\": {\"code\": -32000, \"message\": \"Response too large\"}, \"id\": null}");
@@ -148,13 +148,13 @@ void http_json_rpc_loop() {
           client.writeFully("Connection: close\n\r");  // the connection will be closed after completion of the response
           client.writeFully("\n\r");
           // Execute the request
-          ArduinoJson::StaticJsonDocument<3000> doc;
+          JsonDocument doc;
           DeserializationError err = deserializeJson(doc, client);
 
           if (err == DeserializationError::Ok) 
           {
             // Execute the request
-            ArduinoJson::StaticJsonDocument<3000> response;
+            JsonDocument response;
             if(registry.execute_request(doc, response)){
               if(response.overflowed()) {
                 client.println("{\"jsonrpc\": \"2.0\", \"error\": {\"code\": -32000, \"message\": \"Response too large\"}, \"id\": null}");
@@ -196,13 +196,13 @@ void http_library_json_rpc_loop() {
         auto is_post = httpRequest.getMethod() == ArduinoHttpServer::Method::Post;
         auto is_json = httpRequest.getContentType() == "application/json";
         if(is_post && is_json) {
-          ArduinoJson::StaticJsonDocument<3000> doc;
+          JsonDocument doc;
           DeserializationError err = deserializeJson(doc, httpRequest.getBody());
 
           if (err == DeserializationError::Ok)
           {
             // Execute the request
-            ArduinoJson::StaticJsonDocument<3000> response;
+            JsonDocument response;
             if(registry.execute_request(doc, response)){
               if(response.overflowed()) {
                 ArduinoHttpServer::StreamHttpReply httpReply(client, httpRequest.getContentType());
@@ -243,12 +243,12 @@ void tcp_json_rpc_loop() {
   if(client) {
     if(client.connected()) {
 
-      StaticJsonDocument<3000> json_doc;
+      JsonDocument json_doc;
       auto err = deserializeJson(json_doc, client);
 
       if (err == DeserializationError::Ok) {
         // Execute the request
-        ArduinoJson::StaticJsonDocument<3000> response;
+        JsonDocument response;
         if(registry.execute_request(json_doc, response)) {
           if(response.overflowed()) {
             client.writeFully("{\"jsonrpc\": \"2.0\", \"error\": {\"code\": -32000, \"message\": \"Response too large\"}, \"id\": null}");
