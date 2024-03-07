@@ -5,6 +5,9 @@
 #include <experimental/optional>
 #include <ArduinoJson.h>
 
+/**
+ * @brief A Request according to the JSON-RPC 2.0 specification
+ */
 struct Request {
     const char* method;
     JsonVariantConst params;
@@ -136,17 +139,9 @@ private:
         response["id"] = request.id;
 
         if (procedures_by_name.find(request.method) == procedures_by_name.end()) {
-            auto error = response["error"].to<JsonObject>();
-            error["code"] = -32601; // Method not found
-            error["message"] = "Method not found";   
-            // write all possible names to data field
-            auto data = error["data"].to<JsonArray>();
-            for(auto it = procedures_by_name.begin(); it != procedures_by_name.end(); it++) {
-                data.add(it->first);
-            }
+            make_invalid_method_error(response);
         } else {
-            auto procedure = procedures_by_name[request.method];
-            procedure(request.params, response);
+            procedures_by_name[request.method](request.params, response);
         }
         return not request.isNotification();
     }
@@ -159,6 +154,16 @@ private:
                 response.remove(response.size() - 1);
             }
         }
+    }
+
+    void make_invalid_method_error(JsonObject response) {
+        auto error = response["error"].to<JsonObject>();
+        error["code"] = -32601; // Method not found
+        error["message"] = "Method not found";
+        auto data = error["data"].to<JsonArray>();
+            for(auto it = procedures_by_name.begin(); it != procedures_by_name.end(); it++) {
+                data.add(it->first);
+            }
     }
 };
 
